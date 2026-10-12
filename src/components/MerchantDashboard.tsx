@@ -130,7 +130,11 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
     );
   }
 
-  const storeUrl = `${window.location.origin}/store/${merchant.slug}`;
+  const vercelBase = 'https://whatsapp-zeta-rose.vercel.app';
+  const currentBase = typeof window !== 'undefined' ? window.location.origin : vercelBase;
+  const storeUrl = `${currentBase}/?store=${merchant.slug}`;
+  const vercelStoreUrl = `${vercelBase}/?store=${merchant.slug}`;
+  const [copiedVercelLink, setCopiedVercelLink] = useState(false);
 
   const handleCopyLink = async () => {
     try {
@@ -140,6 +144,18 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
       setTimeout(() => {
         setCopiedLink(false);
         setCopiedSuccessMessage(false);
+      }, 2500);
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleCopyVercelLink = async () => {
+    try {
+      await navigator.clipboard.writeText(vercelStoreUrl);
+      setCopiedVercelLink(true);
+      setTimeout(() => {
+        setCopiedVercelLink(false);
       }, 2500);
     } catch {
       // Fallback
@@ -379,26 +395,43 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
             </span>
           </div>
 
-          <button
-            onClick={handleCopyLink}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shrink-0 cursor-pointer ${
-              copiedLink
-                ? 'bg-emerald-400 text-slate-900 shadow-md'
-                : 'bg-white text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            {copiedLink ? (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Copied to Clipboard!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                <span>Copy Link</span>
-              </>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleCopyLink}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                copiedLink
+                  ? 'bg-emerald-400 text-slate-900 shadow-md'
+                  : 'bg-white text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy Link</span>
+                </>
+              )}
+            </button>
+
+            {currentBase !== vercelBase && (
+              <button
+                onClick={handleCopyVercelLink}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border ${
+                  copiedVercelLink
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                    : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+                }`}
+                title="Copy production Vercel link for this store"
+              >
+                {copiedVercelLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <ExternalLink className="w-3.5 h-3.5 text-slate-300" />}
+                <span>{copiedVercelLink ? 'Vercel Copied!' : 'Copy Vercel URL'}</span>
+              </button>
             )}
-          </button>
+          </div>
         </div>
       </div>
 

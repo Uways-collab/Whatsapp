@@ -26,12 +26,22 @@ function AppContent() {
     const parseUrl = () => {
       const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
-      const storeParam = params.get('store');
+      const hash = window.location.hash;
 
+      const storeParam = params.get('store') || params.get('slug');
       if (storeParam) {
         setActiveSlug(storeParam);
         setCurrentView('store');
         return;
+      }
+
+      if (hash.startsWith('#/store/')) {
+        const slug = hash.replace('#/store/', '').split('?')[0].split('/')[0];
+        if (slug) {
+          setActiveSlug(slug);
+          setCurrentView('store');
+          return;
+        }
       }
 
       if (path.startsWith('/store/')) {
@@ -43,7 +53,7 @@ function AppContent() {
         }
       }
 
-      if (path === '/dashboard' || params.get('view') === 'dashboard') {
+      if (path === '/dashboard' || params.get('view') === 'dashboard' || hash === '#/dashboard') {
         setCurrentView('dashboard');
         return;
       }
@@ -54,16 +64,20 @@ function AppContent() {
 
     parseUrl();
     window.addEventListener('popstate', parseUrl);
-    return () => window.removeEventListener('popstate', parseUrl);
+    window.addEventListener('hashchange', parseUrl);
+    return () => {
+      window.removeEventListener('popstate', parseUrl);
+      window.removeEventListener('hashchange', parseUrl);
+    };
   }, []);
 
   const navigateTo = (view: 'home' | 'dashboard' | 'store', slug?: string) => {
     setCurrentView(view);
     if (view === 'store' && slug) {
       setActiveSlug(slug);
-      window.history.pushState({}, '', `/store/${slug}`);
+      window.history.pushState({}, '', `/?store=${slug}`);
     } else if (view === 'dashboard') {
-      window.history.pushState({}, '', '/dashboard');
+      window.history.pushState({}, '', '/?view=dashboard');
     } else {
       window.history.pushState({}, '', '/');
     }

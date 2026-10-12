@@ -169,31 +169,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                   Firebase Domain Authorization Required
                 </p>
                 <p className="text-amber-800 text-[11px] mt-0.5">
-                  Firebase restricts Google Sign-In to authorized domains for your project (<code className="font-bold">basic-ship-953bd</code>).
+                  Firebase restricts Google Sign-In to authorized domains for project <code className="font-bold">basic-ship-953bd</code>.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white p-2.5 rounded-xl border border-amber-200/80 flex items-center justify-between gap-2">
-              <span className="font-mono text-[11px] text-slate-700 truncate select-all">
-                {currentHost}
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyDomain}
-                className="shrink-0 px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
-              >
-                {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedDomain ? 'Copied' : 'Copy'}</span>
-              </button>
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold text-slate-700">Add these 2 domains to Authorized Domains:</p>
+              
+              {/* Vercel production domain */}
+              <div className="bg-white p-2 rounded-xl border border-amber-200/80 flex items-center justify-between gap-2">
+                <span className="font-mono text-[11px] text-slate-800 truncate select-all">
+                  whatsapp-zeta-rose.vercel.app
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText('whatsapp-zeta-rose.vercel.app');
+                    setCopiedDomain(true);
+                    setTimeout(() => setCopiedDomain(false), 2000);
+                  }}
+                  className="shrink-0 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>Copy Vercel</span>
+                </button>
+              </div>
+
+              {/* Dev domain if different */}
+              {currentHost !== 'whatsapp-zeta-rose.vercel.app' && (
+                <div className="bg-white p-2 rounded-xl border border-amber-200/80 flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] text-slate-700 truncate select-all">
+                    {currentHost}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyDomain}
+                    className="shrink-0 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedDomain ? 'Copied' : 'Copy Dev'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="text-[11px] text-slate-600 space-y-1">
-              <p className="font-semibold text-slate-800">To authorize in 30 seconds:</p>
+            <div className="text-[11px] text-slate-600 space-y-1 pt-1">
+              <p className="font-semibold text-slate-800">Steps to authorize:</p>
               <ol className="list-decimal list-inside space-y-0.5 text-slate-600 pl-0.5">
-                <li>Open Firebase Console &gt; Authentication &gt; Settings</li>
+                <li>Click the link below to open Firebase Settings</li>
                 <li>Under <strong>Authorized domains</strong>, click <strong>Add domain</strong></li>
-                <li>Paste <code className="text-amber-900 bg-amber-100/60 px-1 rounded">{currentHost}</code> and Save</li>
+                <li>Paste the copied domain(s) and save</li>
               </ol>
             </div>
 
@@ -201,7 +227,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               href={firebaseSettingsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-800 font-bold underline"
+              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-800 font-bold underline pt-1"
             >
               <span>Open Firebase Authentication Settings</span>
               <ExternalLink className="w-3 h-3" />

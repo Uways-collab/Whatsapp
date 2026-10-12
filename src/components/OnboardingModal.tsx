@@ -201,7 +201,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onSucc
               />
             </div>
             <div className="mt-1 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 flex items-center justify-between">
-              <span>Your store link: <strong>/store/{slug || 'your-slug'}</strong></span>
+              <span>Your store link: <strong>/?store={slug || 'your-slug'}</strong></span>
               {slug.length >= 2 && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
             </div>
             {errors.slug && (
