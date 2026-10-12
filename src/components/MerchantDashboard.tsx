@@ -695,6 +695,7 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
         }}
         onSave={handleSaveProduct}
         initialProduct={editingProduct}
+        storeId={merchant.id}
       />
 
       {/* Store Settings Modal */}

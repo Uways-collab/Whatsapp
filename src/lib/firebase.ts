@@ -7,11 +7,8 @@ import {
   createUserWithEmailAndPassword, 
   signOut as fbSignOut 
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDocFromServer 
-} from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -20,6 +17,7 @@ const app = initializeApp(firebaseConfig);
 // CRITICAL: Initialize Firestore with firestoreDatabaseId as required by AI Studio skill
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {

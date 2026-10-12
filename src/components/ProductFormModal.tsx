@@ -1,14 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types/store';
 import { productSchema } from '../lib/validation';
+import { storage } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { PRESET_IMAGE_SUGGESTIONS } from '../lib/mockData';
-import { X, Tag, Image, Check, Loader2, DollarSign, Layers } from 'lucide-react';
+import { 
+  X, 
+  Tag, 
+  UploadCloud, 
+  Image as ImageIcon, 
+  Check, 
+  Loader2, 
+  Layers, 
+  AlertCircle, 
+  Trash2,
+  RefreshCw
+} from 'lucide-react';
 
 interface ProductFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (productData: Omit<Product, 'id' | 'merchantId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   initialProduct?: Product | null;
+  storeId?: string;
 }
 
 export const ProductFormModal: React.FC<ProductFormModalProps> = ({
@@ -16,6 +30,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   onClose,
   onSave,
   initialProduct,
+  storeId = 'merchant_store',
 }) => {
   const [name, setName] = useState('');
   const [priceStr, setPriceStr] = useState('');
@@ -23,6 +38,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [inStock, setInStock] = useState(true);
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+
+  // Upload states
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -46,9 +66,73 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
     setErrors({});
     setGeneralError(null);
+    setUploadError(null);
+    setIsUploading(false);
   }, [initialProduct, isOpen]);
 
   if (!isOpen) return null;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select a valid image file (JPEG, PNG, WEBP, or GIF).');
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadError('File size is too large. Please select an image under 8MB.');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setUploadError(null);
+
+      // Unique file path: products/{storeId}/{timestamp}_{file.name}
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storagePath = `products/${storeId}/${timestamp}_${sanitizedName}`;
+
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      setImageUrl(downloadUrl);
+    } catch (err: unknown) {
+      console.error('Firebase Storage upload failed:', err);
+      const errMessage = err instanceof Error ? err.message : String(err);
+      
+      // If Storage is not enabled or CORS block occurs, provide clear feedback + local data fallback
+      setUploadError(
+        `Failed to upload image to Firebase Storage: ${errMessage}. (If Storage is new, ensure the Storage bucket is activated in Firebase Console).`
+      );
+
+      // Provide instant local reader fallback so merchant can proceed without blocking
+      try {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            setImageUrl(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch {
+        // ignore
+      }
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImageUrl('');
+    setUploadError(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,34 +269,136 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </div>
           </div>
 
-          {/* Image URL & Preset Selection */}
+          {/* Direct Image File Upload via Firebase Storage */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Product Image URL
+                Product Image <span className="text-slate-400 font-normal lowercase">(direct upload)</span>
               </label>
-              <span className="text-[11px] text-slate-400">Optional</span>
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove Image</span>
+                </button>
+              )}
             </div>
-            <div className="relative">
-              <Image className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://example.com/item.jpg"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-              />
-            </div>
-            
-            {/* Quick Presets */}
-            <div className="mt-2">
-              <p className="text-[11px] text-slate-500 mb-1.5 font-medium">Or pick a sample photo:</p>
+
+            {/* Hidden File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              disabled={isUploading}
+              className="hidden"
+            />
+
+            {/* Upload Area / Preview Box */}
+            {imageUrl ? (
+              /* Uploaded Image Preview */
+              <div className="relative group rounded-2xl border-2 border-emerald-200 bg-emerald-50/30 p-3 flex items-center gap-4">
+                <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                  <img
+                    src={imageUrl}
+                    alt="Uploaded Product"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=150&q=80';
+                    }}
+                  />
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white">
+                      <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Photo Uploaded & Ready</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5 max-w-[200px] sm:max-w-[260px]">
+                    Firebase Storage URL linked
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="mt-2 text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Replace with another photo</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Dropzone / Upload Trigger Button */
+              <div
+                onClick={() => !isUploading && fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
+                  isUploading
+                    ? 'border-emerald-400 bg-emerald-50/50 cursor-wait'
+                    : 'border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/20'
+                }`}
+              >
+                {isUploading ? (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    </div>
+                    <p className="text-xs font-bold text-emerald-800">
+                      Uploading to Firebase Storage...
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Generating public product URL
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center group-hover:scale-105 transition">
+                      <UploadCloud className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">
+                        Click to upload photo from your device
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        JPEG, PNG, WEBP, or GIF (max 8MB)
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Upload Error Banner */}
+            {uploadError && (
+              <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span className="leading-snug">{uploadError}</span>
+              </div>
+            )}
+
+            {/* Optional Sample Presets */}
+            <div className="mt-3">
+              <p className="text-[11px] text-slate-500 mb-1.5 font-medium">
+                Or pick from sample presets:
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {PRESET_IMAGE_SUGGESTIONS.map((preset) => (
                   <button
                     key={preset.label}
                     type="button"
-                    onClick={() => setImageUrl(preset.url)}
+                    onClick={() => {
+                      setImageUrl(preset.url);
+                      setUploadError(null);
+                    }}
                     className={`text-[11px] px-2.5 py-1 rounded-lg border transition cursor-pointer flex items-center gap-1 ${
                       imageUrl === preset.url
                         ? 'bg-emerald-50 border-emerald-500 text-emerald-800 font-bold'
@@ -225,23 +411,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 ))}
               </div>
             </div>
-
-            {imageUrl && (
-              <div className="mt-3 flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
-                <img
-                  src={imageUrl}
-                  alt="Preview"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=150&q=80';
-                  }}
-                  className="w-12 h-12 rounded-lg object-cover border border-slate-200"
-                />
-                <span className="text-xs text-slate-600 font-medium truncate flex-1">
-                  Preview loaded successfully
-                </span>
-              </div>
-            )}
           </div>
 
           {/* In Stock Toggle */}
@@ -290,7 +459,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isUploading}
               className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-2 disabled:opacity-60"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
