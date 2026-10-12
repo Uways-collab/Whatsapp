@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global catch-all default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidMerchant(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.ownerId is string && data.ownerId.size() <= 128
+        && data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100
+        && data.whatsappNumber is string && data.whatsappNumber.size() >= 10 && data.whatsappNumber.size() <= 20
+        && data.whatsappNumber.matches('^[0-9]{10,20}$')
+        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 50
+        && data.slug.matches('^[a-z0-9-]+$')
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('currency' in data) || (data.currency is string && data.currency.size() <= 10))
+        && (!('createdAt' in data) || data.createdAt is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function isValidProduct(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.merchantId is string && data.merchantId.size() <= 128
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && (data.price is int || data.price is float || data.price is number) && data.price >= 0
+        && data.inStock is bool
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 60))
+        && (!('createdAt' in data) || data.createdAt is string)
+        && (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    match /merchants/{merchantId} {
+      // Public buyers can view store information to browse products & place WhatsApp orders
+      allow get: if isValidId(merchantId);
+      allow list: if true;
+
+      // Merchant owner can create their store profile
+      allow create: if isValidId(merchantId)
+        && isSignedIn()
+        && request.auth.uid == merchantId
+        && incoming().ownerId == request.auth.uid
+        && incoming().id == merchantId
+        && isValidMerchant(incoming());
+
+      // Merchant owner can update their store profile
+      allow update: if isValidId(merchantId)
+        && isOwner(existing().ownerId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().id == existing().id
+        && isValidMerchant(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['storeName', 'whatsappNumber', 'slug', 'description', 'currency', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      // Public buyers can view and list products for a store
+      allow get: if isValidId(productId);
+      allow list: if true;
+
+      // Only merchant owner can add products
+      allow create: if isValidId(productId)
+        && isSignedIn()
+        && incoming().merchantId == request.auth.uid
+        && incoming().id == productId
+        && isValidProduct(incoming());
+
+      // Only merchant owner can update products
+      allow update: if isValidId(productId)
+        && isSignedIn()
+        && existing().merchantId == request.auth.uid
+        && incoming().merchantId == existing().merchantId
+        && incoming().id == existing().id
+        && isValidProduct(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'price', 'imageUrl', 'inStock', 'description', 'category', 'updatedAt']);
+
+      // Only merchant owner can delete their products
+      allow delete: if isValidId(productId)
+        && isSignedIn()
+        && existing().merchantId == request.auth.uid;
+    }
+  }
+}

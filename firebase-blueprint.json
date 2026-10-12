@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Merchant": {
+      "title": "Merchant",
+      "description": "Store profile for WhatsApp merchants",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "storeName": { "type": "string", "maxLength": 100, "minLength": 2 },
+        "whatsappNumber": { "type": "string", "maxLength": 20, "minLength": 10, "pattern": "^[0-9]{10,20}$" },
+        "slug": { "type": "string", "maxLength": 50, "minLength": 2, "pattern": "^[a-z0-9-]+$" },
+        "description": { "type": "string", "maxLength": 500 },
+        "currency": { "type": "string", "maxLength": 10 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "ownerId", "storeName", "whatsappNumber", "slug"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Store product listed by merchant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "merchantId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120, "minLength": 2 },
+        "price": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "inStock": { "type": "boolean" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "category": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "merchantId", "name", "price", "inStock"]
+    }
+  },
+  "firestore": {
+    "/merchants/{merchantId}": {
+      "schema": "Merchant",
+      "description": "Merchants store information and WhatsApp contacts"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products available in stores"
+    }
+  }
+}

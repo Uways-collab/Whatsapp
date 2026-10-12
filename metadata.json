@@ -1,0 +1,6 @@
+{
+  "name": "QuickStore — WhatsApp Merchant Store Builder",
+  "description": "Mobile-first WhatsApp storefront builder for merchants. Create your store in seconds, list products in NGN, and accept structured WhatsApp orders with one tap.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
