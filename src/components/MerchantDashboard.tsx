@@ -40,7 +40,7 @@ interface MerchantDashboardProps {
 }
 
 export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigateToStore }) => {
-  const { user, merchant, updateStoreProfile } = useAuth();
+  const { user, merchant, updateStoreProfile, isSandbox } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
@@ -66,6 +66,31 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
   useEffect(() => {
     if (!user || !merchant) return;
 
+    if (isSandbox) {
+      const saved = localStorage.getItem('quickstore_sandbox_products');
+      if (saved) {
+        try {
+          setProducts(JSON.parse(saved));
+          setLoadingProducts(false);
+          return;
+        } catch {
+          // fallback
+        }
+      }
+      // Populate with default samples in sandbox
+      const initialSandboxProducts: Product[] = SAMPLE_PRODUCTS.map((p, idx) => ({
+        ...p,
+        id: `sandbox_prod_${idx + 1}`,
+        merchantId: user.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+      setProducts(initialSandboxProducts);
+      localStorage.setItem('quickstore_sandbox_products', JSON.stringify(initialSandboxProducts));
+      setLoadingProducts(false);
+      return;
+    }
+
     setLoadingProducts(true);
     const q = query(collection(db, 'products'), where('merchantId', '==', user.uid));
 
@@ -89,7 +114,7 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
     );
 
     return () => unsubscribe();
-  }, [user, merchant]);
+  }, [user, merchant, isSandbox]);
 
   if (!merchant) {
     return (
@@ -132,6 +157,31 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
   ) => {
     if (!user) return;
 
+    if (isSandbox) {
+      if (editingProduct) {
+        const updated = products.map((p) =>
+          p.id === editingProduct.id
+            ? { ...p, ...productData, updatedAt: new Date().toISOString() }
+            : p
+        );
+        setProducts(updated);
+        localStorage.setItem('quickstore_sandbox_products', JSON.stringify(updated));
+      } else {
+        const newId = `sandbox_prod_${Date.now()}`;
+        const newProd: Product = {
+          ...productData,
+          id: newId,
+          merchantId: user.uid,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        const updated = [newProd, ...products];
+        setProducts(updated);
+        localStorage.setItem('quickstore_sandbox_products', JSON.stringify(updated));
+      }
+      return;
+    }
+
     if (editingProduct) {
       // Update existing
       const docRef = doc(db, 'products', editingProduct.id);
@@ -157,6 +207,12 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
   // Delete product
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm('Are you sure you want to remove this product from your store?')) return;
+    if (isSandbox) {
+      const updated = products.filter((p) => p.id !== productId);
+      setProducts(updated);
+      localStorage.setItem('quickstore_sandbox_products', JSON.stringify(updated));
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'products', productId));
     } catch (err) {
@@ -166,6 +222,14 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
 
   // Toggle inStock
   const handleToggleStock = async (product: Product) => {
+    if (isSandbox) {
+      const updated = products.map((p) =>
+        p.id === product.id ? { ...p, inStock: !p.inStock, updatedAt: new Date().toISOString() } : p
+      );
+      setProducts(updated);
+      localStorage.setItem('quickstore_sandbox_products', JSON.stringify(updated));
+      return;
+    }
     try {
       const docRef = doc(db, 'products', product.id);
       await updateDoc(docRef, {
@@ -182,6 +246,18 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onNavigate
     if (!user) return;
     try {
       setSeedingLoading(true);
+      if (isSandbox) {
+        const seeded: Product[] = SAMPLE_PRODUCTS.map((sample, idx) => ({
+          ...sample,
+          id: `sandbox_seed_${Date.now()}_${idx}`,
+          merchantId: user.uid,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+        setProducts(seeded);
+        localStorage.setItem('quickstore_sandbox_products', JSON.stringify(seeded));
+        return;
+      }
       for (const sample of SAMPLE_PRODUCTS) {
         const id = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         await setDoc(doc(db, 'products', id), {

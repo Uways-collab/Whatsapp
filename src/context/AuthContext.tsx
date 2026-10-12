@@ -10,8 +10,7 @@ import {
 import { 
   doc, 
   getDoc, 
-  setDoc, 
-  serverTimestamp 
+  setDoc 
 } from 'firebase/firestore';
 import { 
   auth, 
@@ -22,14 +21,18 @@ import {
 } from '../lib/firebase';
 import { Merchant } from '../types/store';
 
+const SANDBOX_KEY = 'quickstore_sandbox_merchant';
+
 interface AuthContextType {
   user: User | null;
   merchant: Merchant | null;
   loading: boolean;
   merchantLoading: boolean;
+  isSandbox: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string) => Promise<void>;
+  signInSandboxMerchant: () => void;
   signOut: () => Promise<void>;
   createStoreProfile: (data: { storeName: string; whatsappNumber: string; slug: string; description?: string }) => Promise<Merchant>;
   updateStoreProfile: (data: Partial<Merchant>) => Promise<void>;
@@ -41,6 +44,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [isSandbox, setIsSandbox] = useState<boolean>(() => {
+    return localStorage.getItem(SANDBOX_KEY) === 'true';
+  });
   const [loading, setLoading] = useState(true);
   const [merchantLoading, setMerchantLoading] = useState(false);
 
@@ -60,7 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       console.warn("Could not fetch merchant profile:", err);
-      // Fallback for safety if permissions check on brand new user
       setMerchant(null);
     } finally {
       setMerchantLoading(false);
@@ -68,8 +73,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // If sandbox was active
+    if (localStorage.getItem(SANDBOX_KEY) === 'true') {
+      const mockUser = {
+        uid: 'demo_merchant_user_1',
+        email: 'merchant.demo@quickstore.app',
+        displayName: 'Demo Nigerian Merchant',
+      } as unknown as User;
+      setUser(mockUser);
+      setIsSandbox(true);
+      setMerchant({
+        id: 'demo_merchant_user_1',
+        ownerId: 'demo_merchant_user_1',
+        storeName: 'Lagos Glamour & Crafts',
+        whatsappNumber: '2348012345678',
+        slug: 'lagos-glamour',
+        description: 'Authentic Nigerian fashion, tech lifestyle gadgets & gourmet treats delivered across Lagos, Abuja & nationwide.',
+        currency: 'NGN',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      setIsSandbox(false);
       if (currentUser) {
         await fetchMerchantProfile(currentUser.uid);
       } else {
@@ -82,19 +112,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async () => {
+    localStorage.removeItem(SANDBOX_KEY);
+    setIsSandbox(false);
     await signInWithPopup(auth, googleProvider);
   };
 
   const signInWithEmail = async (email: string, pass: string) => {
+    localStorage.removeItem(SANDBOX_KEY);
+    setIsSandbox(false);
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const signUpWithEmail = async (email: string, pass: string) => {
+    localStorage.removeItem(SANDBOX_KEY);
+    setIsSandbox(false);
     await createUserWithEmailAndPassword(auth, email, pass);
   };
 
+  const signInSandboxMerchant = () => {
+    localStorage.setItem(SANDBOX_KEY, 'true');
+    const mockUser = {
+      uid: 'demo_merchant_user_1',
+      email: 'merchant.demo@quickstore.app',
+      displayName: 'Demo Nigerian Merchant',
+    } as unknown as User;
+    setUser(mockUser);
+    setIsSandbox(true);
+    setMerchant({
+      id: 'demo_merchant_user_1',
+      ownerId: 'demo_merchant_user_1',
+      storeName: 'Lagos Glamour & Crafts',
+      whatsappNumber: '2348012345678',
+      slug: 'lagos-glamour',
+      description: 'Authentic Nigerian fashion, tech lifestyle gadgets & gourmet treats delivered across Lagos, Abuja & nationwide.',
+      currency: 'NGN',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    localStorage.removeItem(SANDBOX_KEY);
+    setIsSandbox(false);
+    try {
+      await firebaseSignOut(auth);
+    } catch {
+      // ignore
+    }
+    setUser(null);
     setMerchant(null);
   };
 
@@ -104,14 +169,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     slug: string;
     description?: string;
   }): Promise<Merchant> => {
-    if (!auth.currentUser) {
+    const activeUid = user?.uid || auth.currentUser?.uid;
+    if (!activeUid) {
       throw new Error("You must be logged in to create a store.");
     }
-    const uid = auth.currentUser.uid;
-    const path = `merchants/${uid}`;
     const newMerchant: Merchant = {
-      id: uid,
-      ownerId: uid,
+      id: activeUid,
+      ownerId: activeUid,
       storeName: data.storeName.trim(),
       whatsappNumber: data.whatsappNumber.trim(),
       slug: data.slug.toLowerCase().trim(),
@@ -121,8 +185,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString(),
     };
 
+    if (isSandbox) {
+      setMerchant(newMerchant);
+      return newMerchant;
+    }
+
+    const path = `merchants/${activeUid}`;
     try {
-      await setDoc(doc(db, 'merchants', uid), newMerchant);
+      await setDoc(doc(db, 'merchants', activeUid), newMerchant);
       setMerchant(newMerchant);
       return newMerchant;
     } catch (err) {
@@ -131,16 +201,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateStoreProfile = async (data: Partial<Merchant>) => {
-    if (!auth.currentUser || !merchant) return;
-    const uid = auth.currentUser.uid;
-    const path = `merchants/${uid}`;
+    const activeUid = user?.uid || auth.currentUser?.uid;
+    if (!activeUid || !merchant) return;
     const updated: Merchant = {
       ...merchant,
       ...data,
       updatedAt: new Date().toISOString(),
     };
+
+    if (isSandbox) {
+      setMerchant(updated);
+      return;
+    }
+
+    const path = `merchants/${activeUid}`;
     try {
-      await setDoc(doc(db, 'merchants', uid), updated, { merge: true });
+      await setDoc(doc(db, 'merchants', activeUid), updated, { merge: true });
       setMerchant(updated);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, path);
@@ -148,8 +224,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshMerchant = async () => {
-    if (auth.currentUser) {
-      await fetchMerchantProfile(auth.currentUser.uid);
+    const activeUid = user?.uid || auth.currentUser?.uid;
+    if (activeUid && !isSandbox) {
+      await fetchMerchantProfile(activeUid);
     }
   };
 
@@ -160,9 +237,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         merchant,
         loading,
         merchantLoading,
+        isSandbox,
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
+        signInSandboxMerchant,
         signOut,
         createStoreProfile,
         updateStoreProfile,
